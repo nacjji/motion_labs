@@ -1,23 +1,23 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity('patients')
 export class Patients {
-  @PrimaryGeneratedColumn('increment')
-  id: number;
+  @PrimaryColumn()
+  id: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: false })
   name: string;
 
   @Column({
     type: 'varchar',
     length: 20,
     comment: '하이픈 제거된 11자리 숫자',
-    nullable: true,
+    nullable: false,
   })
   phone: string; // 하이픈 제거된 11자리 숫자
 
   @Column({ type: 'varchar', length: 50, nullable: true })
-  chartNumber?: string;
+  chart?: string;
 
   @Column({
     type: 'varchar',
@@ -25,7 +25,7 @@ export class Patients {
     comment: '생년월일-1 ~ 4',
     nullable: true,
   })
-  birthGender: string;
+  rrn: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   address: string;

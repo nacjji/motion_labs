@@ -1,30 +1,34 @@
 export class PatientDto {
   constructor({
+    id,
     name,
     phone,
-    chartNumber,
-    birthGender,
+    chart,
+    rrn,
     address,
     memo,
   }: {
+    id: string;
     name: string;
     phone: string;
-    chartNumber: string;
-    birthGender: string;
+    chart: string;
+    rrn: string;
     address: string;
     memo?: string;
   }) {
+    this.id = id;
     this.name = name;
     this.phone = phone;
-    this.chartNumber = chartNumber;
-    this.birthGender = birthGender;
+    this.chart = chart;
+    this.rrn = rrn;
     this.address = address;
     this.memo = memo;
   }
+  id: string;
   name: string;
   phone: string;
-  chartNumber: string;
-  birthGender: string;
+  chart: string;
+  rrn: string;
   address: string;
   memo?: string;
 }

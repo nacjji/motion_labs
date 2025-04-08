@@ -14,6 +14,14 @@ export class XlsxHandlerService {
   /**
    * 파일 업로드 핸들러
    */
+
+  // 1  파일 업로드
+  // 2. 데이터 직렬화
+  // 3. 파싱한 데이터 배열에 담음
+  // 4. 유효성 검사한 데이터 배열에 담음
+  // 5. 중복제거한 데이터 배열에 담음
+  // 6. 배열 DB에 저장
+
   async uploadXlsxFile(file: Express.Multer.File) {
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -23,52 +31,102 @@ export class XlsxHandlerService {
       { defval: '' },
     );
 
-    const result = await this.processPatientData(rawData);
+    // serialize
+    const serializedData = this.serialize(rawData);
 
-    return result;
+    const validatedData = serializedData.filter((patient) =>
+      this.validate(patient),
+    );
+
+    const mergedData = this.mergeDuplicatePatients(validatedData);
+
+    // await this.patientsRepository.save(validatedData);
   }
 
-  // 데이터 전처리
-  private async processPatientData(rows: Record<string, string>[]) {
-    const totalRows = rows.length;
-    let processedRows = 0;
-    let skippedRows = 0;
+  private serialize(rawData: Record<string, string>[]) {
+    return rawData.map((row) => {
+      const identifier = row['차트번호']
+        ? `${row['이름']}_${row['전화번호']}_${row['차트번호']}`
+        : `${row['이름']}_${row['전화번호']}`;
 
-    const create: PatientDto[] = [];
-    for (const row of rows) {
-      const isValid = this.validateRow(row);
-      if (!isValid) {
-        skippedRows++;
-        continue;
-      }
-
-      const patient = new PatientDto({
+      return new PatientDto({
+        id: identifier,
         name: row['이름'],
         phone: row['전화번호'],
-        chartNumber: row['차트번호'],
-        birthGender: row['생년월일-1 ~ 4'],
+        chart: row['차트번호'],
+        rrn: row['주민등록번호'],
         address: row['주소'],
         memo: row['메모'],
       });
-      console.log(row);
-
-      create.push(patient);
-
-      // TODO: 중복 병합 처리 및 DB 저장
-      processedRows++;
-    }
-    await this.patientsRepository.save(create);
-
-    return {
-      totalRows,
-      processedRows,
-      skippedRows,
-    };
+    });
   }
 
-  // 유효성 검사
-  private validateRow(row: Record<string, string>): boolean {
-    // TODO: 이름/전화번호/주민번호 등 유효성 검사
+  private validate(patient: Patients) {
+    // 이름
+    if (patient.name.length < 1 || patient.name.length > 255) {
+      return false;
+    }
+    if (patient.chart.length > 255) {
+      return false;
+    }
+    if (patient.address.length > 255) {
+      return false;
+    }
+    if (patient.memo.length > 255) {
+      return false;
+    }
+
+    // 전화번호
+    const cleanPhone =
+      typeof patient.phone === 'string'
+        ? patient.phone.replace(/-/g, '')
+        : patient.phone;
+
+    if (cleanPhone.length !== 11 || Number.isNaN(parseInt(cleanPhone))) {
+      return false;
+    }
+
+    // 주민등록번호
+    if (patient.rrn) {
+      const cleanRrn = patient.rrn.replace(/-/g, '').replace(/\*/g, '');
+
+      // 6자리: 생년월일만
+      if (cleanRrn.length === 6) {
+        const month = parseInt(cleanRrn.substring(2, 4));
+        const day = parseInt(cleanRrn.substring(4, 6));
+
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+          return false;
+        }
+        patient.rrn = `${cleanRrn}-0`;
+      }
+      // 7자리 이상: 생년월일 + 성별
+      else if (cleanRrn.length >= 7) {
+        const month = parseInt(cleanRrn.substring(2, 4));
+        const day = parseInt(cleanRrn.substring(4, 6));
+        const gender = parseInt(cleanRrn.substring(6, 7));
+
+        if (
+          month < 1 ||
+          month > 12 ||
+          day < 1 ||
+          day > 31 ||
+          (gender !== 1 && gender !== 2 && gender !== 3 && gender !== 4)
+        ) {
+          return false;
+        }
+        patient.rrn = `${cleanRrn.substring(0, 6)}-${gender}`;
+      }
+      // 6자리 미만은 유효하지 않음
+      else {
+        return false;
+      }
+    }
+
     return true;
+  }
+
+  private mergeDuplicatePatients(patients: Patients[]) {
+    // id 가 같으면 병합 진행
   }
 }
