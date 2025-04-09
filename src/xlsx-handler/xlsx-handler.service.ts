@@ -127,6 +127,24 @@ export class XlsxHandlerService {
   }
 
   private mergeDuplicatePatients(patients: Patients[]) {
-    // id 가 같으면 병합 진행
+    // 같은 id 끼리 배열로 그룹화
+    //최종 형태 [[{...},{...}],[{...}]]
+    const groupedPatients = patients.reduce((acc, patient) => {
+      const id = patient.id;
+      if (!acc[id]) {
+        acc[id] = [];
+      }
+      acc[id].push(patient);
+      return acc;
+    }, {});
+
+    for (const key in groupedPatients) {
+      if (Object.prototype.hasOwnProperty.call(groupedPatients, key)) {
+        const patients = groupedPatients[key];
+        if (patients.length !== 1) {
+          console.log(patients);
+        }
+      }
+    }
   }
 }
