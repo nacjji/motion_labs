@@ -60,7 +60,7 @@ export class XlsxHandlerController {
     const result = await this.xlsxHandlerService.uploadXlsxFile(file);
 
     const end = Date.now();
-    console.log(`밴치마크 결과: ${end - start}ms`);
+    console.log(`소요시간: ${end - start}ms`);
     return result;
   }
 }

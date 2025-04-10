@@ -43,7 +43,7 @@ export class PatientsController {
     const result = await this.patientsService.getPatients(pagenationDto);
 
     const end = Date.now();
-    console.log(`Time taken: ${end - start}ms`);
+    console.log(`소요시간: ${end - start}ms`);
     return result;
   }
 }
