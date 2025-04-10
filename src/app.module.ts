@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { PatientsModule } from './patients/patients.module';
 import { XlsxHandlerModule } from './xlsx-handler/xlsx-handler.module';
 
@@ -22,7 +20,5 @@ import { XlsxHandlerModule } from './xlsx-handler/xlsx-handler.module';
     PatientsModule,
     XlsxHandlerModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

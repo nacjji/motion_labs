@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PatientDto } from 'src/patients/dto/patient.dto';
 import { Patients } from 'src/patients/entities/patient.entity';
@@ -25,6 +25,14 @@ export class XlsxHandlerService {
     processedRows: number;
     skippedRows: number;
   }> {
+    // 확장자 xlsx만 허용
+    if (
+      file.mimetype !==
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ) {
+      throw new BadRequestException('xlsx 파일만 업로드 가능합니다.');
+    }
+
     // 1. 파일 읽기 및 첫번째 시트 선택
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -107,26 +115,46 @@ export class XlsxHandlerService {
 
     if (patient.rrn) {
       const cleanRrn = patient.rrn.replace(/-/g, '').replace(/\*/g, '');
+
       if (cleanRrn.length === 6) {
+        // 생년월일 형식 검증
         const month = parseInt(cleanRrn.substring(2, 4));
         const day = parseInt(cleanRrn.substring(4, 6));
+
         if (month < 1 || month > 12 || day < 1 || day > 31) {
           return false;
         }
+
+        // 6자리만 있는 경우 끝에 0 추가
         patient.rrn = `${cleanRrn}-0`;
       } else if (cleanRrn.length >= 7) {
+        const year = parseInt(cleanRrn.substring(0, 2));
         const month = parseInt(cleanRrn.substring(2, 4));
         const day = parseInt(cleanRrn.substring(4, 6));
         const gender = parseInt(cleanRrn.substring(6, 7));
-        if (
-          month < 1 ||
-          month > 12 ||
-          day < 1 ||
-          day > 31 ||
-          (gender !== 1 && gender !== 2 && gender !== 3 && gender !== 4)
-        ) {
+
+        // 생년월일 형식 검증
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
           return false;
         }
+
+        // 주민번호 뒷자리 첫 숫자 검증 (성별)
+        // 00년대 = 2000년대
+        const is2000sOrLater = year >= 0 && year <= 23; // 현재 2023년 기준이라면
+
+        if (is2000sOrLater) {
+          // 00년 이후 주민번호 뒷자리 첫 값은 3,4,5,6만 허용(5,6 외국인)
+          if (gender !== 3 && gender !== 4 && gender !== 5 && gender !== 6) {
+            return false;
+          }
+        } else {
+          // 00년 이전 주민번호 뒷자리 첫 값은 1,2,5,6만 허용
+          if (gender !== 1 && gender !== 2 && gender !== 5 && gender !== 6) {
+            return false;
+          }
+        }
+
+        // 주민번호 형식으로 변환
         patient.rrn = `${cleanRrn.substring(0, 6)}-${gender}`;
       } else {
         return false;

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OffsetPagenationDto } from './dto/offset-pagenation.dto';
+import { GetPatientsListDto } from './dto/get-patients-list.dto';
 import { Patients } from './entities/patient.entity';
 @Injectable()
 export class PatientsService {
@@ -10,7 +10,7 @@ export class PatientsService {
     private readonly patientsRepository: Repository<Patients>,
   ) {}
 
-  async getPatients(pagenationDto: OffsetPagenationDto) {
+  async getPatients(pagenationDto: GetPatientsListDto) {
     const { page, limit = 10 } = pagenationDto;
     const pageSize = Number(limit);
 
@@ -25,9 +25,23 @@ export class PatientsService {
         'patient.address address',
         'patient.memo memo',
       ]);
-
     queryBuilder.orderBy('patient.id', 'ASC');
 
+    if (pagenationDto.name) {
+      queryBuilder.andWhere('patient.name LIKE :name', {
+        name: `%${pagenationDto.name}%`,
+      });
+    }
+    if (pagenationDto.phone) {
+      queryBuilder.andWhere('patient.phone LIKE :phone', {
+        phone: `%${pagenationDto.phone}%`,
+      });
+    }
+    if (pagenationDto.chart) {
+      queryBuilder.andWhere('patient.chart LIKE :chart', {
+        chart: `%${pagenationDto.chart}%`,
+      });
+    }
     // 전체 데이터 수 조회
     const total = await queryBuilder.getCount();
 
