@@ -32,6 +32,12 @@ export class XlsxHandlerController {
   })
   @Post('upload')
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    return await this.xlsxHandlerService.uploadXlsxFile(file);
+    // 밴치마크
+    const start = Date.now();
+    const result = await this.xlsxHandlerService.uploadXlsxFile(file);
+
+    const end = Date.now();
+    console.log(`밴치마크 결과: ${end - start}ms`);
+    return result;
   }
 }

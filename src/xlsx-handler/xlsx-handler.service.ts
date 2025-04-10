@@ -11,18 +11,19 @@ export class XlsxHandlerService {
     @InjectRepository(Patients)
     private readonly patientsRepository: Repository<Patients>,
   ) {}
+
   /**
    * 파일 업로드 핸들러
+   *
+   * 1. 파일 업로드
+   * 2. 데이터 직렬화
+   * 3. 파싱한 데이터 배열에 담음
+   * 4. 유효성 검사한 데이터 배열에 담음
+   * 5. 중복제거한 데이터 배열에 담음
+   * 6. 배열 DB에 저장 (Bulk upsert 적용)
    */
-
-  // 1  파일 업로드
-  // 2. 데이터 직렬화
-  // 3. 파싱한 데이터 배열에 담음
-  // 4. 유효성 검사한 데이터 배열에 담음
-  // 5. 중복제거한 데이터 배열에 담음
-  // 6. 배열 DB에 저장
-
   async uploadXlsxFile(file: Express.Multer.File) {
+    // 파일 읽기, 데이터 직렬화, 유효성 검사, 병합 작업은 동일하게 처리
     const workbook = XLSX.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
@@ -30,17 +31,24 @@ export class XlsxHandlerService {
       worksheet,
       { defval: '' },
     );
-
-    // serialize
     const serializedData = this.serialize(rawData);
-
     const validatedData = serializedData.filter((patient) =>
       this.validate(patient),
     );
-
     const mergedData = this.mergeDuplicatePatients(validatedData);
+    console.log('병합 결과:', mergedData);
 
-    // await this.patientsRepository.save(validatedData);
+    // Bulk Insert with orIgnore
+    const result = await this.patientsRepository
+      .createQueryBuilder()
+      .insert()
+      .into(Patients)
+      .values(mergedData)
+      .orIgnore() // 중복된 키 발생 시 삽입을 무시함
+      .execute();
+
+    console.log('저장 결과:', result);
+    return result;
   }
 
   private serialize(rawData: Record<string, string>[]) {
@@ -62,7 +70,6 @@ export class XlsxHandlerService {
   }
 
   private validate(patient: Patients) {
-    // 이름
     if (patient.name.length < 1 || patient.name.length > 255) {
       return false;
     }
@@ -75,37 +82,26 @@ export class XlsxHandlerService {
     if (patient.memo.length > 255) {
       return false;
     }
-
-    // 전화번호
     const cleanPhone =
       typeof patient.phone === 'string'
         ? patient.phone.replace(/-/g, '')
         : patient.phone;
-
     if (cleanPhone.length !== 11 || Number.isNaN(parseInt(cleanPhone))) {
       return false;
     }
-
-    // 주민등록번호
     if (patient.rrn) {
       const cleanRrn = patient.rrn.replace(/-/g, '').replace(/\*/g, '');
-
-      // 6자리: 생년월일만
       if (cleanRrn.length === 6) {
         const month = parseInt(cleanRrn.substring(2, 4));
         const day = parseInt(cleanRrn.substring(4, 6));
-
         if (month < 1 || month > 12 || day < 1 || day > 31) {
           return false;
         }
         patient.rrn = `${cleanRrn}-0`;
-      }
-      // 7자리 이상: 생년월일 + 성별
-      else if (cleanRrn.length >= 7) {
+      } else if (cleanRrn.length >= 7) {
         const month = parseInt(cleanRrn.substring(2, 4));
         const day = parseInt(cleanRrn.substring(4, 6));
         const gender = parseInt(cleanRrn.substring(6, 7));
-
         if (
           month < 1 ||
           month > 12 ||
@@ -116,35 +112,46 @@ export class XlsxHandlerService {
           return false;
         }
         patient.rrn = `${cleanRrn.substring(0, 6)}-${gender}`;
-      }
-      // 6자리 미만은 유효하지 않음
-      else {
+      } else {
         return false;
       }
     }
-
     return true;
   }
 
-  private mergeDuplicatePatients(patients: Patients[]) {
-    // 같은 id 끼리 배열로 그룹화
-    //최종 형태 [[{...},{...}],[{...}]]
-    const groupedPatients = patients.reduce((acc, patient) => {
-      const id = patient.id;
-      if (!acc[id]) {
-        acc[id] = [];
-      }
-      acc[id].push(patient);
-      return acc;
-    }, {});
+  mergeDuplicatePatients(patients: Patients[]): Patients[] {
+    const mergedResults: Patients[] = [];
+    let currentMerged: Patients | null = null;
+    let currentId: string | null = null;
 
-    for (const key in groupedPatients) {
-      if (Object.prototype.hasOwnProperty.call(groupedPatients, key)) {
-        const patients = groupedPatients[key];
-        if (patients.length !== 1) {
-          console.log(patients);
+    for (const patient of patients) {
+      if (currentId !== patient.id) {
+        if (currentMerged) {
+          mergedResults.push(currentMerged);
+        }
+        currentId = patient.id;
+        currentMerged = { ...patient };
+      } else {
+        const fields: Array<keyof Patients> = [
+          'name',
+          'phone',
+          'chart',
+          'rrn',
+          'address',
+          'memo',
+        ];
+        for (const field of fields) {
+          const newValue = patient[field];
+          if (newValue !== '' && newValue !== null && newValue !== undefined) {
+            currentMerged![field] = newValue;
+          }
         }
       }
     }
+    if (currentMerged) {
+      mergedResults.push(currentMerged);
+    }
+    console.log('병합된 최종 결과:', mergedResults);
+    return mergedResults;
   }
 }
